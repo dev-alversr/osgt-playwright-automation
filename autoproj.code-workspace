@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../autoproj"
+		},
+		{
+			"name": "playwright-bdd-automation",
+			"path": "../playwright-bdd-automation"
+		}
+	],
+	"settings": {}
+}

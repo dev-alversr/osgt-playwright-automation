@@ -1,0 +1,292 @@
+# ============================================================================
+# Test Automation Framework
+# Docker Compose configuration for complete test environment
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # Main test automation service
+  test-automation:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: tr-onesource-tests
+    environment:
+      - TEST_ENV=docker
+      - NODE_ENV=production
+      - DB_SERVER=db
+      - DB_NAME=onesource_test
+      - DB_USERNAME=${DB_USERNAME:-testuser}
+      - DB_PASSWORD=${DB_PASSWORD:-testpass123}
+      - PG_HOST=postgres
+      - PG_DATABASE=onesource_test
+      - PG_USERNAME=${PG_USERNAME:-testuser}
+      - PG_PASSWORD=${PG_PASSWORD:-testpass123}
+      - REDIS_URL=redis://redis:6379
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-test-encryption-key-123}
+      - API_TOKEN=${API_TOKEN}
+      - HEADLESS=true
+      - BROWSER=chromium
+    volumes:
+      - ./test-results:/app/test-results
+      - ./allure-results:/app/allure-results
+      - ./allure-report:/app/allure-report
+      - ./logs:/app/logs
+    depends_on:
+      - db
+      - postgres
+      - redis
+      - selenium-hub
+    networks:
+      - test-network
+    command: npm test
+
+  # MSSQL Database for testing
+  db:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: tr-onesource-mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=TestPassword123!
+      - MSSQL_DB=onesource_test
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+      - ./scripts/sql:/docker-entrypoint-initdb.d
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P TestPassword123! -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # PostgreSQL Database for testing
+  postgres:
+    image: postgres:15-alpine
+    container_name: tr-onesource-postgres
+    environment:
+      - POSTGRES_DB=onesource_test
+      - POSTGRES_USER=testuser
+      - POSTGRES_PASSWORD=testpass123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres:/docker-entrypoint-initdb.d
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d onesource_test"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: tr-onesource-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Selenium Grid Hub for distributed testing
+  selenium-hub:
+    image: selenium/hub:4.15.0
+    container_name: tr-selenium-hub
+    ports:
+      - "4444:4444"
+      - "4442:4442"
+      - "4443:4443"
+    environment:
+      - GRID_MAX_SESSION=4
+      - GRID_BROWSER_TIMEOUT=300
+      - GRID_TIMEOUT=300
+    networks:
+      - test-network
+
+  # Chrome Node for Selenium Grid
+  selenium-chrome:
+    image: selenium/node-chrome:4.15.0
+    container_name: tr-selenium-chrome
+    depends_on:
+      - selenium-hub
+    environment:
+      - HUB_HOST=selenium-hub
+      - HUB_PORT=4444
+      - NODE_MAX_INSTANCES=2
+      - NODE_MAX_SESSION=2
+    volumes:
+      - /dev/shm:/dev/shm
+    networks:
+      - test-network
+    scale: 2
+
+  # Firefox Node for Selenium Grid
+  selenium-firefox:
+    image: selenium/node-firefox:4.15.0
+    container_name: tr-selenium-firefox
+    depends_on:
+      - selenium-hub
+    environment:
+      - HUB_HOST=selenium-hub
+      - HUB_PORT=4444
+      - NODE_MAX_INSTANCES=1
+      - NODE_MAX_SESSION=1
+    volumes:
+      - /dev/shm:/dev/shm
+    networks:
+      - test-network
+
+  # Allure Report Server
+  allure-server:
+    image: frankescobar/allure-docker-service:2.22.1
+    container_name: tr-allure-server
+    ports:
+      - "5050:5050"
+    environment:
+      - CHECK_RESULTS_EVERY_SECONDS=10
+      - KEEP_HISTORY=20
+      - SECURITY_ENABLED=false
+    volumes:
+      - ./allure-results:/app/allure-results
+      - ./allure-report:/app/default-reports
+    networks:
+      - test-network
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tr-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - test-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tr-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+    networks:
+      - test-network
+
+  # Test Data Generator Service
+  data-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.data-generator
+    container_name: tr-data-generator
+    environment:
+      - DB_SERVER=db
+      - DB_NAME=onesource_test
+      - DB_USERNAME=testuser
+      - DB_PASSWORD=testpass123
+      - PG_HOST=postgres
+      - PG_DATABASE=onesource_test
+    depends_on:
+      - db
+      - postgres
+    volumes:
+      - ./data:/app/data
+    networks:
+      - test-network
+    command: npm run seed:data
+
+  # Mock API Server for testing
+  mock-api:
+    image: mockoon/cli:latest
+    container_name: tr-mock-api
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./mocks:/data
+    command: mockoon-cli start --data /data/api-mocks.json --port 3001
+    networks:
+      - test-network
+
+# Named volumes for data persistence
+volumes:
+  mssql_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# Custom network for service communication
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================================================
+# Usage Instructions:
+# 
+# Start all services:
+# docker-compose up -d
+# 
+# Run tests only:
+# docker-compose up test-automation
+# 
+# Run specific test suite:
+# docker-compose run test-automation npm run test:smoke
+# 
+# View logs:
+# docker-compose logs -f test-automation
+# 
+# Access services:
+# - Allure Reports: http://localhost:5050
+# - Selenium Hub: http://localhost:4444
+# - Grafana: http://localhost:3000 (admin/admin123)
+# - Prometheus: http://localhost:9090
+# - Mock API: http://localhost:3001
+# 
+# Scale browsers:
+# docker-compose up --scale selenium-chrome=3 --scale selenium-firefox=2
+# 
+# Stop all services:
+# docker-compose down
+# 
+# Clean up volumes:
+# docker-compose down -v
+# 
+# Run in different environment:
+# TEST_ENV=staging docker-compose up
+# ============================================================================

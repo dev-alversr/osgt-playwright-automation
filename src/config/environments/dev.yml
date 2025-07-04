@@ -1,0 +1,218 @@
+# ============================================================================
+# Development Environment Configuration
+# Test Automation Framework
+# ============================================================================
+
+# Browser Configuration
+browser: chromium
+headless: false
+timeout: 30000
+retries: 2
+
+# Application URLs
+baseURL: https://dev.onesource.thomsonreuters.com
+apiBaseURL: https://api-dev.onesource.thomsonreuters.com
+
+# Database Configuration
+database:
+  mssql:
+    server: ${DB_SERVER}
+    database: ${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    options:
+      encrypt: true
+      trustServerCertificate: false
+  
+  postgresql:
+    host: ${PG_HOST}
+    port: 5432
+    database: ${PG_DATABASE}
+    username: ${PG_USERNAME}
+    password: ${PG_PASSWORD}
+  
+  dynamodb:
+    region: ${AWS_REGION}
+    accessKeyId: ${AWS_ACCESS_KEY_ID}
+    secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+    endpoint: ${DYNAMODB_ENDPOINT}
+
+# Logging Configuration
+logging:
+  level: debug
+  format: simple
+  transports:
+    - console
+    - file
+  filename: logs/test-dev.log
+
+# Media Capture Configuration
+media:
+  screenshot:
+    mode: only-on-failure
+    fullPage: true
+  video:
+    mode: retain-on-failure
+    size:
+      width: 1920
+      height: 1080
+
+# Performance Monitoring
+performance:
+  monitoring: true
+  metrics:
+    - memory
+    - network
+    - pageLoad
+    - rendering
+  thresholds:
+    pageLoadTime: 5000
+    memoryUsage: 100000000
+    networkLatency: 1000
+
+# API Mocking Configuration
+mocking:
+  enabled: true
+  routes:
+    - /api/users
+    - /api/analytics
+    - /api/reports
+  responses:
+    "/api/users":
+      users: []
+      total: 0
+    "/api/analytics":
+      data: []
+      status: "success"
+    "/api/reports":
+      reports: []
+      count: 0
+
+# Test Data Configuration
+testData:
+  seedOnStartup: true
+  cleanupOnTeardown: true
+  useRealData: false
+  generators:
+    users:
+      count: 50
+      roles:
+        admin: 2
+        manager: 5
+        analyst: 15
+        user: 25
+        viewer: 3
+    companies:
+      count: 10
+      industries:
+        - Technology
+        - Finance
+        - Healthcare
+        - Manufacturing
+
+# Security Configuration
+security:
+  encryption:
+    algorithm: aes-256-gcm
+    keyDerivation: pbkdf2
+  credentials:
+    encryptInMemory: true
+    rotateTokens: false
+  ssl:
+    verify: true
+    certificate: ./certs/dev.crt
+
+# External Integrations
+integrations:
+  slack:
+    enabled: false
+    webhookUrl: ${SLACK_WEBHOOK_URL}
+    channels:
+      - test-automation
+  email:
+    enabled: false
+    smtp:
+      host: ${EMAIL_SMTP_HOST}
+      port: 587
+      secure: false
+    auth:
+      user: ${EMAIL_USERNAME}
+      pass: ${EMAIL_PASSWORD}
+  monitoring:
+    enabled: true
+    healthCheckUrl: ${HEALTH_CHECK_URL}
+    metricsEndpoint: ${METRICS_ENDPOINT}
+    alertEndpoint: ${ALERT_ENDPOINT}
+
+# Feature Flags
+features:
+  apiTesting: true
+  performanceTesting: true
+  visualTesting: false
+  accessibilityTesting: false
+  crossBrowserTesting: false
+  mobileTesting: false
+  apiMocking: true
+  parallelExecution: true
+
+# Retry Configuration
+retry:
+  maxAttempts: 3
+  backoffStrategy: exponential
+  initialDelay: 1000
+  maxDelay: 10000
+  retryableErrors:
+    - NETWORK_ERROR
+    - TIMEOUT_ERROR
+    - PAGE_LOAD_TIMEOUT
+    - ELEMENT_NOT_FOUND
+
+# Parallel Execution
+parallel:
+  enabled: true
+  maxWorkers: 3
+  shardTests: false
+  testIsolation: true
+  sharedState: false
+
+# Debug Configuration
+debug:
+  enabled: true
+  breakpoints: false
+  stepThrough: false
+  saveHar: false
+  saveTrace: true
+  screenshotOnStep: false
+
+# Environment Specific Settings
+environment:
+  name: development
+  stable: false
+  dataRefreshRate: daily
+  maintenanceWindow:
+    start: "02:00"
+    end: "04:00"
+    timezone: "UTC"
+  
+# Custom Configuration for ONESOURCE
+onesource:
+  modules:
+    - dashboard
+    - analytics
+    - reporting
+    - compliance
+    - workflow
+  regions:
+    - northamerica
+    - europe
+    - asiapacific
+  languages:
+    - en-US
+    - en-GB
+    - fr-FR
+    - de-DE
+  currencies:
+    - USD
+    - EUR
+    - GBP
+    - CAD
